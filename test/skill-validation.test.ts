@@ -1332,6 +1332,17 @@ describe('Codex skill', () => {
     expect(content).toContain('mktemp');
   });
 
+  test('codex JSON stream parser uses portable Python discovery', () => {
+    const files = ['codex/SKILL.md.tmpl', 'codex/SKILL.md'];
+
+    for (const rel of files) {
+      const content = fs.readFileSync(path.join(ROOT, rel), 'utf-8');
+      expect(content).toContain('PYTHON_CMD=$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)');
+      expect(content).toContain('PYTHONUNBUFFERED=1 "$PYTHON_CMD" -u -c');
+      expect(content).not.toContain('PYTHONUNBUFFERED=1 python3 -u -c');
+    }
+  });
+
   test('adversarial review in /review always runs both passes', () => {
     const content = fs.readFileSync(path.join(ROOT, 'review', 'SKILL.md'), 'utf-8');
     expect(content).toContain('Adversarial review (always-on)');
