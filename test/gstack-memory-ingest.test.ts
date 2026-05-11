@@ -460,6 +460,78 @@ describe("gstack-memory-ingest writer (gbrain v0.20+ batch `import` interface)",
     expect(stagedList).toMatch(/^\.\/transcripts\/claude-code\/.+\.md$/m);
   });
 
+  // Originally landed in v1.32.0.0 (PR #1411) on the per-file `gbrain put`
+  // path. Postgres rejects 0x00 in UTF-8 text columns. Some Claude Code
+  // transcripts contain NUL inside user-pasted content or tool output. The
+  // renderPageBody helper strips them so the staged .md never carries them
+  // into gbrain. Adapted for the batch architecture: we read the staged file
+  // contents instead of fake-gbrain stdin.
+  it("strips NUL bytes from the staged body before gbrain import", () => {
+    const home = makeTestHome();
+    const gstackHome = join(home, ".gstack");
+    mkdirSync(gstackHome, { recursive: true });
+
+    // Shim that copies staging dir into stagingCopy so we can inspect the
+    // exact bytes that would have been fed to gbrain.
+    const binDir = join(home, "fake-bin");
+    mkdirSync(binDir, { recursive: true });
+    const stagingCopy = join(home, "staging-copy");
+    const script = `#!/usr/bin/env bash
+case "\${1:-}" in
+  --help|-h) echo "Usage: gbrain <command>"; echo "Commands:"; echo "  import <dir>   Import"; exit 0 ;;
+  import)
+    DIR="\${2:-}"
+    cp -R "\$DIR" "${stagingCopy}" 2>/dev/null || true
+    if [[ " \$* " == *" --json "* ]]; then
+      echo '{"status":"success","duration_s":0.1,"imported":1,"skipped":0,"errors":0,"chunks":1,"total_files":1}'
+    fi
+    exit 0 ;;
+  *) echo "unknown"; exit 2 ;;
+esac
+`;
+    const binPath = join(binDir, "gbrain");
+    writeFileSync(binPath, script, "utf-8");
+    chmodSync(binPath, 0o755);
+
+    // Pasted content with embedded NUL bytes in a few shapes:
+    //  - inline mid-token: abc\x00def
+    //  - at start of a line
+    //  - at end of a line
+    //  - back-to-back run
+    const dirty =
+      `abc\x00def hello\x00\x00world\nleading\x00line\nline-trailing\x00\nclean line\n`;
+    const session =
+      `{"type":"user","message":{"role":"user","content":${JSON.stringify(dirty)}},"timestamp":"2026-05-01T00:00:00Z","cwd":"/tmp/nul-test"}\n` +
+      `{"type":"assistant","message":{"role":"assistant","content":"ok"},"timestamp":"2026-05-01T00:00:01Z"}\n`;
+    writeClaudeCodeSession(home, "tmp-nul-test", "nul123", session);
+
+    const r = runScript(["--bulk", "--include-unattributed", "--quiet"], {
+      HOME: home,
+      GSTACK_HOME: gstackHome,
+      PATH: `${binDir}:${process.env.PATH || ""}`,
+    });
+
+    expect(r.exitCode).toBe(0);
+    expect(existsSync(stagingCopy)).toBe(true);
+    const findMd = spawnSync("find", [stagingCopy, "-name", "*.md", "-type", "f"], {
+      encoding: "utf-8",
+    });
+    const mdPaths = (findMd.stdout || "").trim().split("\n").filter(Boolean);
+    expect(mdPaths.length).toBeGreaterThan(0);
+    const body = readFileSync(mdPaths[0], "utf-8");
+
+    // The body that gbrain will read MUST NOT contain any 0x00 byte.
+    expect(body.includes("\x00")).toBe(false);
+    // But the surrounding content should survive intact — we strip NUL only.
+    expect(body).toContain("abcdef");
+    expect(body).toContain("helloworld");
+    expect(body).toContain("leadingline");
+    expect(body).toContain("line-trailing");
+    expect(body).toContain("clean line");
+
+    rmSync(home, { recursive: true, force: true });
+  });
+
   it("injects title/type/tags into the staged page's YAML frontmatter", () => {
     const home = makeTestHome();
     const gstackHome = join(home, ".gstack");

@@ -320,10 +320,13 @@ describe('gen-skill-docs', () => {
     // added (per /sync-gbrain plan §4). Ratcheted 35000 → 36500 in v1.27.0.0
     // when generate-brain-sync-block.ts gained the gbrain_mcp_mode probe +
     // remote-mode ARTIFACTS_SYNC status line (Path 4 of /setup-gbrain).
+    // Ratcheted 36500 → 39000 in the contributor wave when #1205 added the
+    // \\u-escape CJK rule (rule 12 + self-check item) to the AskUserQuestion
+    // preamble.
     for (const skill of reviewSkills) {
       const content = fs.readFileSync(skill.path, 'utf-8');
       const preamble = extractPreambleBeforeWorkflow(content, skill.markers);
-      expect(Buffer.byteLength(preamble, 'utf-8')).toBeLessThan(36_500);
+      expect(Buffer.byteLength(preamble, 'utf-8')).toBeLessThan(39_000);
     }
   });
 
