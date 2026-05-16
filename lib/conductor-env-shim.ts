@@ -7,8 +7,12 @@
  *
  * Import this for its side effect: `import "../lib/conductor-env-shim";`
  */
-for (const key of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"] as const) {
-  if (!process.env[key] && process.env[`GSTACK_${key}`]) {
-    process.env[key] = process.env[`GSTACK_${key}`];
+export function promoteConductorEnv(): void {
+  for (const key of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"] as const) {
+    if (!process.env[key] && process.env[`GSTACK_${key}`]) {
+      process.env[key] = process.env[`GSTACK_${key}`];
+    }
   }
 }
+
+promoteConductorEnv();
