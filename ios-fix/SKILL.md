@@ -2,16 +2,7 @@
 name: ios-fix
 preamble-tier: 3
 version: 1.0.0
-description: |
-  Autonomous iOS bug fixer. Takes a bug found by /ios-qa, reads the source,
-  writes the fix, rebuilds, redeploys, and verifies the fix on the real
-  device. Closes the loop: find bug → fix bug → confirm fix — zero human
-  intervention. Captures the pre-bug state snapshot as a regression test
-  fixture, so the bug can never recur silently.
-  Use when /ios-qa reports a bug and you want it fixed automatically, or
-  when asked to "fix this iOS bug", "patch the iPhone app", or "auto-fix
-  the iOS issue". (gstack)
-  Voice triggers (speech-to-text aliases): "fix the iOS bug", "patch the iPhone app", "auto-fix the iOS issue".
+description: Autonomous iOS bug fixer. (gstack)
 allowed-tools:
   - Bash
   - Read
@@ -27,6 +18,20 @@ triggers:
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
+
+
+## When to invoke this skill
+
+Takes a bug found by /ios-qa, reads the source,
+writes the fix, rebuilds, redeploys, and verifies the fix on the real
+device. Closes the loop: find bug → fix bug → confirm fix — zero human
+intervention. Captures the pre-bug state snapshot as a regression test
+fixture, so the bug can never recur silently.
+Use when /ios-qa reports a bug and you want it fixed automatically, or
+when asked to "fix this iOS bug", "patch the iPhone app", or "auto-fix
+the iOS issue".
+
+Voice triggers (speech-to-text aliases): "fix the iOS bug", "patch the iPhone app", "auto-fix the iOS issue".
 
 ## Preamble (run first)
 
@@ -568,84 +573,7 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 - User-turn override wins: if the current message asks for terse / no explanations / just the answer, skip this section.
 - Terse mode (EXPLAIN_LEVEL: terse): no glosses, no outcome-framing layer, shorter responses.
 
-Jargon list, gloss on first use if the term appears:
-- idempotent
-- idempotency
-- race condition
-- deadlock
-- cyclomatic complexity
-- N+1
-- N+1 query
-- backpressure
-- memoization
-- eventual consistency
-- CAP theorem
-- CORS
-- CSRF
-- XSS
-- SQL injection
-- prompt injection
-- DDoS
-- rate limit
-- throttle
-- circuit breaker
-- load balancer
-- reverse proxy
-- SSR
-- CSR
-- hydration
-- tree-shaking
-- bundle splitting
-- code splitting
-- hot reload
-- tombstone
-- soft delete
-- cascade delete
-- foreign key
-- composite index
-- covering index
-- OLTP
-- OLAP
-- sharding
-- replication lag
-- quorum
-- two-phase commit
-- saga
-- outbox pattern
-- inbox pattern
-- optimistic locking
-- pessimistic locking
-- thundering herd
-- cache stampede
-- bloom filter
-- consistent hashing
-- virtual DOM
-- reconciliation
-- closure
-- hoisting
-- tail call
-- GIL
-- zero-copy
-- mmap
-- cold start
-- warm start
-- green-blue deploy
-- canary deploy
-- feature flag
-- kill switch
-- dead letter queue
-- fan-out
-- fan-in
-- debounce
-- throttle (UI)
-- hydration mismatch
-- memory leak
-- GC pause
-- heap fragmentation
-- stack overflow
-- null pointer
-- dangling pointer
-- buffer overflow
+Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json` (80+ terms). On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
 ## Completeness Principle — Boil the Lake
