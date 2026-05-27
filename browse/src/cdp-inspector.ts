@@ -671,6 +671,23 @@ export function getModificationHistory(): StyleModification[] {
 }
 
 /**
+ * Diagnostic accessor for the $B memory snapshot. Returns current buffer
+ * occupancy, the cap, and how many entries have been evicted since the
+ * last reset.
+ */
+export function getModificationHistoryStats(): {
+  current: number;
+  cap: number;
+  evicted: number;
+} {
+  return {
+    current: modificationHistory.length,
+    cap: MOD_HISTORY_CAP,
+    evicted: Math.max(0, modHistoryTotalPushed - MOD_HISTORY_CAP),
+  };
+}
+
+/**
  * Reset all modifications, restoring original values.
  */
 export async function resetModifications(page: Page): Promise<void> {
