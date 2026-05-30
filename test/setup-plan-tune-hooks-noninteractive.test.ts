@@ -1,5 +1,6 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { execSync } from 'child_process';
 
@@ -45,28 +46,78 @@ describe('setup: plan-tune hooks are non-interactive-safe', () => {
     // No bare blocking read for the plan-tune reply.
     expect(setupSrc).not.toMatch(/read -r PLAN_TUNE_INSTALL_REPLY\b/);
     // It must use a timed read from the controlling tty with an empty fallback.
-    expect(setupSrc).toMatch(/read -t \d+ -r PLAN_TUNE_INSTALL_REPLY <\/dev\/tty/);
+    // The timeout may be a literal or a named variable (e.g. "$_PT_PROMPT_TIMEOUT").
+    expect(setupSrc).toMatch(/read -t (?:\d+|"?\$\{?\w+\}?"?) -r PLAN_TUNE_INSTALL_REPLY <\/dev\/tty/);
   });
 
   test('interactive prompt is gated on a real TTY and non-quiet', () => {
     // The prompt branch requires both stdin+stdout TTYs and not --quiet.
     expect(setupSrc).toMatch(/\[ "\$QUIET" -ne 1 \] && \[ -t 0 \] && \[ -t 1 \]/);
   });
+
+  test('decision input is normalized (lowercase + whitespace-stripped)', () => {
+    // "YES" / " yes" from a flag/env must not silently downgrade to skip.
+    expect(setupSrc).toMatch(/tr '\[:upper:\]' '\[:lower:\]'/);
+    expect(setupSrc).toMatch(/PT_DECISION=\$\(printf .* tr/);
+  });
+});
+
+describe('dev-setup: never silently mutates global settings.json', () => {
+  const DEV_SETUP = path.join(ROOT, 'bin', 'dev-setup');
+  const devSetupSrc = fs.readFileSync(DEV_SETUP, 'utf-8');
+
+  test('runs setup with stdin detached AND --plan-tune-hooks=prompt pin', () => {
+    // stdin alone only suppresses the prompt branch; the flag (highest
+    // precedence) is what stops a saved `plan_tune_hooks: yes` / env opt-in
+    // from rewriting global hooks to the ephemeral worktree path.
+    expect(devSetupSrc).toMatch(/setup" --plan-tune-hooks=prompt <\/dev\/null/);
+  });
 });
 
 describe('gstack-config: plan_tune_hooks key', () => {
+  // Isolate state: gstack-config reads $GSTACK_HOME/config.yaml. Point it at a
+  // fresh temp dir so `get` returns the built-in default rather than whatever
+  // the host machine has in ~/.gstack/config.yaml (which would make the
+  // default-value assertion non-deterministic).
+  let tmpHome: string;
+  let env: NodeJS.ProcessEnv;
+
+  beforeAll(() => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-cfg-test-'));
+    env = { ...process.env, GSTACK_HOME: tmpHome };
+  });
+
+  afterAll(() => {
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+
   test('default is "prompt"', () => {
     const out = execSync(`${GSTACK_CONFIG} get plan_tune_hooks`, {
       encoding: 'utf-8',
-      env: { ...process.env, HOME: process.env.HOME },
+      env,
     }).trim();
     expect(out).toBe('prompt');
   });
 
   test('appears in defaults and list output', () => {
-    const defaults = execSync(`${GSTACK_CONFIG} defaults`, { encoding: 'utf-8' });
+    const defaults = execSync(`${GSTACK_CONFIG} defaults`, { encoding: 'utf-8', env });
     expect(defaults).toContain('plan_tune_hooks');
-    const list = execSync(`${GSTACK_CONFIG} list`, { encoding: 'utf-8' });
+    const list = execSync(`${GSTACK_CONFIG} list`, { encoding: 'utf-8', env });
     expect(list).toContain('plan_tune_hooks');
+  });
+
+  test('accepts valid values (round-trips yes/no/prompt)', () => {
+    for (const v of ['yes', 'no', 'prompt']) {
+      execSync(`${GSTACK_CONFIG} set plan_tune_hooks ${v}`, { encoding: 'utf-8', env });
+      const got = execSync(`${GSTACK_CONFIG} get plan_tune_hooks`, { encoding: 'utf-8', env }).trim();
+      expect(got).toBe(v);
+    }
+  });
+
+  test('rejects out-of-domain values (warns + falls back to prompt)', () => {
+    const res = execSync(`${GSTACK_CONFIG} set plan_tune_hooks maybe 2>&1`, { encoding: 'utf-8', env });
+    expect(res.toLowerCase()).toContain('not recognized');
+    const got = execSync(`${GSTACK_CONFIG} get plan_tune_hooks`, { encoding: 'utf-8', env }).trim();
+    expect(got).toBe('prompt');
   });
 });
