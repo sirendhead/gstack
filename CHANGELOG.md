@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.57.0.0] - 2026-06-01
+
+## **/office-hours got 25% lighter, and there is now a test that proves slimming a skill never degrades the questions it asks you.**
+
+Two things shipped. First, `/office-hours` is the third Phase B carve: at 118KB it was the second-heaviest skill, and every session paid for the design-doc templates and the tiered relationship handoff up front, even though those only matter at the very end. They moved into `sections/design-and-handoff.md`, behind a single STOP-Read after Phase 4.5. The live conversation (Phases 1 through 4.5) stays in the always-loaded skeleton. Second, and bigger for the long run: a paranoid AskUserQuestion test suite that proves the carving program does not quietly wreck the most user-facing surface in gstack. The fear was real. Slimming a skill could strand the question format (no ELI10, no recommendation, no pros/cons) in a section that is not loaded when the question fires. Now that cannot happen without a test going red.
+
+### The numbers that matter
+
+Measured from the generated skeletons (`wc -c <skill>/SKILL.md`) and the SDK capture eval (`test/skill-e2e-auq-matrix.test.ts`), regenerated for all hosts:
+
+| Metric | Before (v1.56) | After (v1.57) | Δ |
+|--------|----------------|---------------|---|
+| office-hours always-loaded | 118,280 B (~29.5K tokens) | 88,975 B (~22.2K tokens) | -24.8% |
+| design doc + handoff loaded per run | always | only at Phase 5 | on-demand |
+| office-hours AUQ (carved vs verbose) | 7/7 format, substance 5 | 7/7 format, substance 5 | no degradation |
+| skills with always-loaded AUQ-format guarantee | 0 | every interactive skill | Layer 0 |
+
+Across `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/plan-devex-review`, `/office-hours`, `/cso`, `/spec`, `/design-consultation`, and `/codex`, the first AskUserQuestion each fires scores a perfect 7/7 on format with recommendation substance 4-5.
+
+### What this means for you
+
+`/office-hours` starts a quarter lighter and pulls in the design-doc and handoff machinery only when it reaches them. You will not notice any behavior change. And every skill that asks you questions now carries a guarantee: the decision-brief format (plain-English ELI10, an explicit recommendation with a real reason, pros and cons, the stakes) is provably in context the instant any question fires, in both the fat and slim versions. The carving program can keep shrinking skills without anyone wondering whether the questions got worse.
+
+### Itemized changes
+
+#### Added
+- `office-hours/sections/design-and-handoff.md` — Phase 5 design-doc templates + Phase 6 tiered handoff, behind a STOP-Read pointer, with a passive `manifest.json` registry.
+- `test/auq-format-always-loaded.test.ts` — free, per-PR keystone: every interactive skill must carry the full AskUserQuestion format spec in its always-loaded skeleton, never stranded in a section. 51 cases plus a negative control.
+- `test/skill-e2e-auq-matrix.test.ts` — drives each AUQ-heavy skill to its first question and grades it to the plan-ceo bar (7/7 format, substance >=4).
+- `test/skill-e2e-auq-verbose-vs-carved-ab.test.ts` — proves a carved skill's question is not worse than the pre-carve monolith's, on the same trigger.
+- `test/skill-e2e-auq-consistency.test.ts` — same trigger N times, fails on any format element that appears in one run but not another.
+- `test/codex-e2e-recommendation-substance.test.ts` — grades `/codex`'s live recommendation substance.
+
+#### Changed
+- `/office-hours` is a skeleton + one section on Claude; Phases 1-4.5 stay always-loaded; external hosts still receive the full inline skill (no behavior change off Claude).
+
+#### For contributors
+- `test/helpers/auq-sdk-capture.ts` — reusable SDK capture engine: drives a skill to its AUQ, captures the verbatim generated text cleanly (real-PTY mangles plan-mode questions), grades format + recommendation substance robust to the connective.
+- Parity, size-budget, gen-skill-docs, and skill-validation treat office-hours as a carved skill (union content checks, skeleton-shrink assertion).
+
 ## [1.56.0.0] - 2026-05-31
 
 ## **The biggest plan-review skill stopped taxing every session. /plan-ceo-review's always-loaded cost dropped 42%, and its deep review loads only when you reach it.**
