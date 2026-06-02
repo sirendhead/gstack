@@ -263,7 +263,13 @@ export const PARITY_INVARIANTS: ParityInvariant[] = [
     minBytes: 70_000,
   },
   {
+    // Carved (v2 plan T9): skeleton + sections/review-sections.md. The 7 design
+    // passes + required outputs moved to the section; content checks run against
+    // the union. Skeleton shrank 112,057 -> 76,024 B (-32.2%); maxSkeletonBytes
+    // 82KB = measured + headroom.
     skill: 'plan-design-review',
+    sectioned: true,
+    maxSkeletonBytes: 82_000,
     mustContain: [
       'design',
       'visual',

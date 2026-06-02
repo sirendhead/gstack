@@ -745,7 +745,7 @@ describe('REVIEW_DASHBOARD resolver', () => {
   });
 
   test('plan-design-review chaining mentions eng, ceo, and design skills', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('/plan-eng-review');
     expect(content).toContain('/plan-ceo-review');
     expect(content).toContain('/design-shotgun');
@@ -1551,7 +1551,7 @@ describe('preamble routing injection', () => {
 
 describe('DESIGN_OUTSIDE_VOICES resolver', () => {
   test('plan-design-review contains outside voices section', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('Design Outside Voices');
     expect(content).toContain('CODEX_AVAILABLE');
     expect(content).toContain('LITMUS SCORECARD');
@@ -1570,7 +1570,7 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
   });
 
   test('branches correctly per skillName — different prompts', () => {
-    const planContent = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const planContent = readSkillUnion('plan-design-review');
     const consultContent = fs.readFileSync(path.join(ROOT, 'design-consultation', 'SKILL.md'), 'utf-8');
     // plan-design-review uses analytical prompt (high reasoning)
     expect(planContent).toContain('model_reasoning_effort="high"');
@@ -1583,7 +1583,7 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
 
 describe('DESIGN_HARD_RULES resolver', () => {
   test('plan-design-review Pass 4 contains hard rules', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('Design Hard Rules');
     expect(content).toContain('Classifier');
     expect(content).toContain('MARKETING/LANDING PAGE');
@@ -1596,26 +1596,26 @@ describe('DESIGN_HARD_RULES resolver', () => {
   });
 
   test('includes all 3 rule sets', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('Landing page rules');
     expect(content).toContain('App UI rules');
     expect(content).toContain('Universal rules');
   });
 
   test('references shared AI slop blacklist items', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('3-column feature grid');
     expect(content).toContain('Purple/violet/indigo');
   });
 
   test('includes OpenAI hard rejection criteria', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('Generic SaaS card grid');
     expect(content).toContain('Carousel with no narrative purpose');
   });
 
   test('includes OpenAI litmus checks', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'plan-design-review', 'SKILL.md'), 'utf-8');
+    const content = readSkillUnion('plan-design-review');
     expect(content).toContain('Brand/product unmistakable');
     expect(content).toContain('premium with all decorative shadows removed');
   });
