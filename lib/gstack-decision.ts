@@ -16,7 +16,7 @@
 import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
-import { writeFileSync, renameSync, existsSync, readFileSync, appendFileSync } from "fs";
+import { writeFileSync, renameSync, existsSync, readFileSync, appendFileSync, statSync, openSync, closeSync, unlinkSync } from "fs";
 import { appendJsonl, readJsonl, hasInjection } from "./jsonl-store";
 import { scan } from "./redact-engine";
 
@@ -77,12 +77,17 @@ export function decisionPaths(slug: string, gstackHome?: string): DecisionPaths 
 export function datamark(text: string): string {
   const ZWSP = "\u200b"; // zero-width space: breaks token recognition, near-invisible
   return text
-    .replace(/[\u0000-\u001f]/g, " ") // strip ASCII control chars (incl. newlines)
+    // strip C0/C1 control chars + Unicode line terminators (U+0085/2028/2029 render as
+    // newlines in many tokenizers/markdown; "strip newlines" must cover them)
+    .replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]/g, " ")
     .replace(/`{3,}/g, "'''") // neutralize markdown code fences
     .replace(/-{3,}/g, "\u2014") // neutralize `---` banner sentinels (em dash)
     .replace(/<\|/g, `<${ZWSP}|`) // neutralize <|im_start|>-style chat markers
     .replace(/\|>/g, `|${ZWSP}>`)
-    .replace(/<(\/?)(system|user|assistant|tool)>/gi, `<${ZWSP}$1$2>`); // neutralize role tags
+    .replace(/<(\/?)(system|user|assistant|tool)>/gi, `<${ZWSP}$1$2>`) // neutralize role tags
+    // neutralize chat turn-prefixes (Human:/Assistant:/System:/User:) — defeat the
+    // angle-tag pass and are Claude's native turn delimiters
+    .replace(/\b(human|assistant|system|user)(\s*):/gi, `$1${ZWSP}$2:`);
 }
 
 export type ValidateResult =
@@ -126,6 +131,16 @@ export function validateDecide(input: Partial<DecisionEvent>): ValidateResult {
     return {
       ok: false,
       error: `decision contains a HIGH-tier secret (${redacted.counts.HIGH} finding(s)); rotate + remove it, do not log secrets`,
+    };
+  }
+  // MEDIUM = PII / credential-shaped content. The taxonomy says "confirm via
+  // AskUserQuestion", but this store is NON-INTERACTIVE and syncs cross-machine,
+  // so there is no confirm path — fail closed rather than silently persist + sync a
+  // secret that later resurfaces into agent context.
+  if (redacted.counts.MEDIUM > 0) {
+    return {
+      ok: false,
+      error: `decision contains MEDIUM-tier sensitive content (${redacted.counts.MEDIUM} finding(s): PII or credential-shaped). This store is non-interactive and syncs across machines, so it fails closed — remove or rephrase the value before logging.`,
     };
   }
 
@@ -187,7 +202,7 @@ export function filterByScope(active: ActiveDecision[], ctx: { branch?: string; 
     if (d.scope === "repo") return true;
     if (d.scope === "branch") return !!ctx.branch && d.branch === ctx.branch;
     if (d.scope === "issue") return !!ctx.issue && d.issue === ctx.issue;
-    return true;
+    return false; // unknown/garbage scope: fail conservative, don't leak into every context
   });
 }
 
@@ -236,6 +251,8 @@ export interface CompactResult {
   archivedCount: number;
   /** redacted decisions DROPPED entirely (expunged, NOT archived). */
   expungedCount: number;
+  /** true when compaction was skipped to avoid clobbering a concurrent writer/compactor. */
+  skipped?: boolean;
 }
 
 /**
@@ -244,29 +261,63 @@ export interface CompactResult {
  *  - superseded decisions → appended to `decisions.archive.jsonl` (history),
  *  - REDACTED decisions → expunged (dropped, NOT archived) — that's redact's job:
  *    a `redact` is how an accidentally-captured secret leaves the store for good.
- * Atomic rewrite (tmp + rename). Refreshes the snapshot.
+ *
+ * Concurrency: appends are lock-free (O_APPEND), but compact is a read-modify-rewrite
+ * that would clobber an append landing in its window. Two guards: (1) an O_EXCL lock
+ * file serializes compactions (no double-archive / tmp tear); (2) the log size is
+ * re-checked immediately before the destructive write — if an append landed since the
+ * read, compact ABORTS untouched (returns skipped) so no decision is ever lost. The
+ * caller re-runs. Atomic rewrite (tmp + rename); refreshes the snapshot.
  */
 export function compact(paths: DecisionPaths): CompactResult {
-  const events = readEvents(paths);
-  const active = computeActive(events);
-  const activeIds = new Set(active.map((d) => d.id));
-  const redactedIds = new Set(
-    events.filter((e) => e.kind === "redact" && e.supersedes).map((e) => e.supersedes as string),
-  );
-  // Superseded = a decide that's neither active nor redacted. Archive these for history.
-  const superseded = events.filter(
-    (e): e is DecisionEvent => e.kind === "decide" && !activeIds.has(e.id) && !redactedIds.has(e.id),
-  );
-  // One batched append (not one open/write/close per event) — matches the atomic
-  // batched rewrite of the active log below and shrinks the mid-compact crash window.
-  if (superseded.length) {
-    appendFileSync(paths.archive, superseded.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf-8");
+  const lockPath = `${paths.log}.compact.lock`;
+  let lockFd: number;
+  try {
+    lockFd = openSync(lockPath, "wx"); // O_EXCL|O_CREAT — throws EEXIST if a compact holds it
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
+      return { activeCount: computeActive(readEvents(paths)).length, archivedCount: 0, expungedCount: 0, skipped: true };
+    }
+    throw err;
   }
+  try {
+    const sizeBefore = existsSync(paths.log) ? statSync(paths.log).size : 0;
+    const events = readEvents(paths);
+    const active = computeActive(events);
+    const activeIds = new Set(active.map((d) => d.id));
+    const redactedIds = new Set(
+      events.filter((e) => e.kind === "redact" && e.supersedes).map((e) => e.supersedes as string),
+    );
+    // Superseded = a decide that's neither active nor redacted. Archive these for history.
+    const superseded = events.filter(
+      (e): e is DecisionEvent => e.kind === "decide" && !activeIds.has(e.id) && !redactedIds.has(e.id),
+    );
 
-  const tmp = `${paths.log}.tmp.${process.pid}`;
-  writeFileSync(tmp, active.map((d) => JSON.stringify(d)).join("\n") + (active.length ? "\n" : ""), "utf-8");
-  renameSync(tmp, paths.log);
-  writeSnapshot(paths, active);
+    // Append-race guard: if the log grew/changed since we read it, an append landed —
+    // rewriting now would drop it. Abort untouched; the caller re-runs.
+    const sizeNow = existsSync(paths.log) ? statSync(paths.log).size : 0;
+    if (sizeNow !== sizeBefore) {
+      return { activeCount: active.length, archivedCount: 0, expungedCount: 0, skipped: true };
+    }
 
-  return { activeCount: active.length, archivedCount: superseded.length, expungedCount: redactedIds.size };
+    // One batched append (not one open/write/close per event) — matches the atomic
+    // batched rewrite of the active log below and shrinks the mid-compact crash window.
+    if (superseded.length) {
+      appendFileSync(paths.archive, superseded.map((e) => JSON.stringify(e)).join("\n") + "\n", "utf-8");
+    }
+
+    const tmp = `${paths.log}.tmp.${process.pid}`;
+    writeFileSync(tmp, active.map((d) => JSON.stringify(d)).join("\n") + (active.length ? "\n" : ""), "utf-8");
+    renameSync(tmp, paths.log);
+    writeSnapshot(paths, active);
+
+    return { activeCount: active.length, archivedCount: superseded.length, expungedCount: redactedIds.size };
+  } finally {
+    closeSync(lockFd);
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // best-effort lock cleanup; a leftover lock only blocks the NEXT compact, which re-runs
+    }
+  }
 }

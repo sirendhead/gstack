@@ -31,6 +31,9 @@ export const INJECTION_PATTERNS: readonly RegExp[] = [
   /\bsystem\s*:/i,
   /\bassistant\s*:/i,
   /\buser\s*:/i,
+  /\bhuman\s*:/i, // Claude's native turn prefix — bypassed the denylist AND datamark
+  /disregard\s+(all\s+)?(previous|above|prior)/i,
+  /from\s+now\s+on\b/i,
   /do\s+not\s+(report|flag|mention)/i,
   /approve\s+(all|every|this)/i,
 ];

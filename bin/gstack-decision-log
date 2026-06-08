@@ -42,6 +42,10 @@ function enqueue(): void {
 
 if (args.includes("--compact")) {
   const r = compact(paths);
+  if (r.skipped) {
+    console.log("compact skipped: a concurrent write/compact is in progress; log left intact — re-run");
+    process.exit(0);
+  }
   console.log(`compacted: ${r.activeCount} active, ${r.archivedCount} archived, ${r.expungedCount} expunged`);
   enqueue();
   process.exit(0);
