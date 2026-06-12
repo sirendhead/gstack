@@ -625,6 +625,13 @@ markdown file). Every image caps at the content box — zero truncation, ever.
 Oversized photos downscale to print resolution (300dpi) so payloads stay
 small with no visible quality loss.
 
+Remote (http/https) images are **blocked with a visible placeholder** by
+default — offline posture; pass `--allow-network` to fetch them. An image
+that resolves outside the markdown's directory (even via symlink) still
+inlines, but warns loudly; `--strict` makes it fatal. Files over 64MB or
+non-regular files (fifos, devices) degrade to a placeholder instead of
+hanging the run.
+
 Per-image directives, written immediately after the image:
 
 ```
@@ -657,7 +664,8 @@ $P generate readme.md out.docx --to docx    # Word: content fidelity (headings,
 ### CI mode — fail loud on missing assets
 
 ```bash
-$P generate docs.md --strict     # missing/remote images exit non-zero
+$P generate docs.md --strict     # missing, remote, out-of-tree, oversized,
+                                 # and non-regular-file images exit non-zero
                                  # instead of warn + placeholder
 ```
 
@@ -682,7 +690,8 @@ Branding:
 Output:
   --to pdf|html|docx         Output format (default: pdf). html = single
                              self-contained file; docx = content fidelity.
-  --strict                   Missing/remote images fail the run (CI mode).
+  --strict                   Missing, remote, out-of-tree, oversized, or
+                             non-regular-file images fail the run (CI mode).
   --page-numbers             "N of M" footer (default on)
   --tagged                   Accessible PDF (default on)
   --outline                  PDF bookmarks from headings (default on)
@@ -690,8 +699,9 @@ Output:
   --verbose                  Per-stage timings
 
 Network:
-  --allow-network            Fetch external images. Off by default
-                             (blocks tracking pixels).
+  --allow-network            Fetch external images. Off by default: remote
+                             images render as a visible blocked placeholder
+                             (no tracking pixels fetch at print time).
 
 Metadata:
   --title "..."              Document title (defaults to first H1)
@@ -719,8 +729,9 @@ If the user has a `.md` file open and says "make it look nice", propose
   `--no-syntax` once that flag exists. For now, remove fenced code blocks
   and regenerate.
 - Paged.js timeout → probably no headings in the markdown. Drop `--toc`.
-- External image missing → add `--allow-network` (understand you're giving
-  the markdown file permission to fetch from its image URLs).
+- "[remote image blocked]" placeholder in the output → add `--allow-network`
+  (understand you're giving the markdown file permission to fetch from its
+  image URLs).
 - Generated PDF too tall/wide → `--page-size a4` or `--margins 0.75in`.
 
 ## Output contract

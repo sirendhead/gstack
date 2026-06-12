@@ -49,6 +49,12 @@ markdown file) and **never truncate** — every image caps at the content box.
 Oversized photos downscale to print resolution (300dpi at the content width),
 so a phone photo doesn't bloat the document.
 
+Image safety defaults: remote (http/https) images are **blocked with a
+visible placeholder** unless you pass `--allow-network`. An image path that
+resolves outside the markdown's directory (even through a symlink) still
+inlines but warns loudly. Files over 64MB and non-regular files (fifos,
+devices) degrade to a placeholder instead of hanging the render.
+
 Per-image directives go immediately after the image:
 
 ```markdown
@@ -113,8 +119,10 @@ For documents, embed the `.mmd` source in your markdown instead of the PNG —
 make-pdf generate docs.md --strict
 ```
 
-Missing local images and unfetched remote images exit non-zero instead of
-rendering a placeholder — for docs pipelines where a broken image should
+Missing local images, blocked remote images, out-of-tree image reads (a path
+or symlink resolving outside the markdown's directory), oversized files
+(>64MB), and non-regular files all exit non-zero instead of degrading to a
+warning or placeholder — for docs pipelines where a broken image should
 break the build.
 
 ## Troubleshooting
@@ -127,5 +135,7 @@ break the build.
   trick — top-level `flowchart TB`, two subgraphs with `direction LR` and
   `direction RL`, connect the *subgraphs* (node-level edges across subgraph
   boundaries silently disable `direction`).
-- **Remote images** → not fetched by default (offline posture). Pass
+- **"[remote image blocked]" placeholder** → remote images are never fetched
+  by default (offline posture); the tag is replaced with a visible
+  placeholder so Chromium can't fetch it at print time either. Pass
   `--allow-network` to opt in.
