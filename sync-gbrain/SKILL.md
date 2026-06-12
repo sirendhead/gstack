@@ -847,6 +847,10 @@ Read `gbrain_local_status` from the Step 1 detect output. Branch as follows
 BEFORE invoking the orchestrator:
 
 - **`ok`**: proceed to Step 2 normally.
+- **`timeout`**: proceed to Step 2 — the engine is most likely healthy but
+  slow (cold pooler connection, #1964). Tell the user in one line: "Engine
+  probe timed out (>15s) — proceeding; raise `GSTACK_GBRAIN_PROBE_TIMEOUT_MS`
+  if your pooler is slow." Do NOT treat this as a broken config.
 - **`no-cli`**: STOP. "Local gbrain CLI not installed. Run `/setup-gbrain`
   first."
 - **`missing-config`** AND `gbrain_mcp_mode == "remote-http"`: tell the user
