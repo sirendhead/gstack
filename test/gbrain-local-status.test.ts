@@ -391,6 +391,20 @@ describe("lib/gbrain-local-status — cache behavior", () => {
     expect(localEngineStatus({ noCache: false })).toBe("ok");
   });
 
+  it("invalidates cache when GBRAIN_HOME changes (key invariant, codex D11)", () => {
+    env = makeEnv({ withGbrain: true, gbrainBehavior: "ok", withConfig: true });
+    restoreEnv = applyEnv(env);
+    expect(localEngineStatus({ noCache: false })).toBe("ok");
+
+    // Point GBRAIN_HOME at an empty dir: a stale cached "ok" must not win —
+    // gbrain_home is part of the cache key, so this re-probes and finds no
+    // config at the new location.
+    const altHome = join(env.tmp, "alt-gbrain-empty");
+    mkdirSync(altHome, { recursive: true });
+    process.env.GBRAIN_HOME = altHome;
+    expect(localEngineStatus({ noCache: false })).toBe("missing-config");
+  });
+
   it("invalidates cache when HOME changes (key invariant)", () => {
     env = makeEnv({ withGbrain: true, gbrainBehavior: "ok", withConfig: true });
     restoreEnv = applyEnv(env);

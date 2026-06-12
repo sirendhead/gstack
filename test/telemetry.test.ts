@@ -236,6 +236,36 @@ describe('gstack-telemetry-log', () => {
     expect(lines[0]).not.toContain(token);
   });
 
+  test('truncates error_message to 200 chars after redaction (#1947)', () => {
+    setConfig('telemetry', 'anonymous');
+    const long = 'x'.repeat(300);
+    run(
+      `${BIN}/gstack-telemetry-log --skill qa --duration 10 --outcome error --error-message '${long}' --session-id red-3`,
+    );
+
+    const events = parseJsonl();
+    expect(events).toHaveLength(1);
+    expect(events[0].error_message.length).toBeLessThanOrEqual(200);
+  });
+
+  test('fails closed: error_message becomes null when the engine cannot relocate a span (#1947)', () => {
+    setConfig('telemetry', 'anonymous');
+    const secret = '8Fk2pQ9vXz4wL7mN3rT6yB1cD5eG0hJq';
+    // env.kv-shaped finding (line-anchored, so the assignment leads the
+    // message): the span (value) starts past the regex match start,
+    // locateSpan misses it, redactFindingSpans returns null — the bin must
+    // drop the whole message, never pass it through raw.
+    run(
+      `${BIN}/gstack-telemetry-log --skill qa --duration 10 --outcome error --error-message 'API_KEY=${secret} rejected by daemon' --session-id red-4`,
+    );
+
+    const lines = readJsonl();
+    expect(lines).toHaveLength(1);
+    const event = JSON.parse(lines[0]);
+    expect(event.error_message).toBeNull();
+    expect(lines[0]).not.toContain(secret);
+  });
+
   test('creates analytics directory if missing', () => {
     // Remove analytics dir
     const analyticsDir = path.join(tmpDir, 'analytics');

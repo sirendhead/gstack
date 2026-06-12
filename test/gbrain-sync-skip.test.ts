@@ -152,6 +152,36 @@ describe("gstack-gbrain-sync — split-engine SKIP (plan D12)", () => {
     }
   }, 30_000); // proceeding runs the real code-import path against the slow fake (~11s)
 
+  it("memory stage also PROCEEDS (with warning) on probe timeout (#1964)", () => {
+    const env = makeEnv({ withGbrain: true, gbrainBehavior: "slow", withConfig: true });
+    try {
+      const r = runOrchestrator(env, ["--no-code", "--no-brain-sync"], {
+        GSTACK_GBRAIN_PROBE_TIMEOUT_MS: "300",
+      });
+      const out = r.stdout + r.stderr;
+      expect(out).not.toContain("local engine timeout");
+      expect(out).toContain("memory: engine probe timed out");
+    } finally {
+      env.cleanup();
+    }
+  }, 30_000);
+
+  it("dream stage also PROCEEDS (with warning) on probe timeout (#1964)", () => {
+    const env = makeEnv({ withGbrain: true, gbrainBehavior: "slow", withConfig: true });
+    try {
+      const r = runOrchestrator(
+        env,
+        ["--dream", "--no-code", "--no-memory", "--no-brain-sync"],
+        { GSTACK_GBRAIN_PROBE_TIMEOUT_MS: "300" },
+      );
+      const out = r.stdout + r.stderr;
+      expect(out).not.toContain("local engine timeout");
+      expect(out).toContain("dream: engine probe timed out");
+    } finally {
+      env.cleanup();
+    }
+  }, 30_000);
+
   it("SKIPs code stage when local engine is broken-db; brain-sync still attempted", () => {
     const env = makeEnv({ withGbrain: true, gbrainBehavior: "broken-db", withConfig: true });
     try {

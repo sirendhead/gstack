@@ -174,6 +174,14 @@ describe("gstack-security-dashboard — never reports fake zeros (#1947)", () =>
     expect(parsed.security.top_attack_domains[0].domain).toBe("evil.example");
   });
 
+  it("stale cache responses pass the stale flag through (json mode)", () => {
+    const staleBody = JSON.stringify({ ...JSON.parse(GOOD_BODY_MARKER), stale: true });
+    const r = run(SEC_BIN, { mode: "ok", body: staleBody, json: true });
+    const parsed = JSON.parse(r.stdout.trim());
+    expect(parsed.status).toBe("ok");
+    expect(parsed.stale).toBe(true);
+  });
+
   it("200 without marker (legacy backend) → figures shown with unverified note", () => {
     const r = run(SEC_BIN, { mode: "ok", body: GOOD_BODY_LEGACY });
     expect(r.stdout).toContain("Attacks detected last 7 days: 3");
@@ -185,6 +193,18 @@ describe("gstack-security-dashboard — never reports fake zeros (#1947)", () =>
     const parsed = JSON.parse(r.stdout.trim());
     expect(parsed.status).toBe("legacy_unverified");
     expect(parsed.security.attacks_last_7_days).toBe(3);
+  });
+
+  it("200 with a body missing .security → unknown backend_error, never 0", () => {
+    const r = run(SEC_BIN, {
+      mode: "ok",
+      body: JSON.stringify({ weekly_active: 42, status: "ok" }),
+      json: true,
+    });
+    const parsed = JSON.parse(r.stdout.trim());
+    expect(parsed.status).toBe("unknown");
+    expect(parsed.reason).toBe("backend_error");
+    expect(parsed.security).toBeNull();
   });
 });
 
@@ -211,5 +231,11 @@ describe("gstack-community-dashboard — never reports fake zeros (#1947)", () =
     const r = run(COMM_BIN, { mode: "ok", body: GOOD_BODY_LEGACY });
     expect(r.stdout).toContain("Weekly active installs: 42");
     expect(r.stdout).toContain("unverified");
+  });
+
+  it("200 with a garbage body (no weekly_active) → unknown, never 0", () => {
+    const r = run(COMM_BIN, { mode: "ok", body: '{"error":"weird"}' });
+    expect(r.stdout).toContain("unknown — backend error (HTTP 200)");
+    expect(r.stdout).not.toContain("Weekly active installs:");
   });
 });
