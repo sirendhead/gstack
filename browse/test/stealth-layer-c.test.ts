@@ -142,18 +142,16 @@ describe('buildGStackLaunchArgs — Pack 1 cmdline-switch construction', () => {
     }
   }
 
-  test('empty env produces only the always-on prepare-stack-trace flag', () => {
+  test('empty env produces no switches (suppress-stack is opt-in)', () => {
     withEnv({}, () => {
-      // The Pack 2 / B11 suppression flag is always emitted unless
-      // explicitly disabled via GSTACK_CDP_STEALTH=off. Six per-install
-      // flags fall through (nothing in env), so we expect just one.
-      expect(buildGStackLaunchArgs()).toEqual([
-        '--gstack-suppress-prepare-stack-trace',
-      ]);
+      // All switches are opt-in: the six per-install flags fall through
+      // (nothing in env), and the Pack 2 / B11 suppression flag is only
+      // emitted when GSTACK_CDP_STEALTH is on/1/true. Empty env → [].
+      expect(buildGStackLaunchArgs()).toEqual([]);
     });
   });
 
-  test('all env values populated → all 7 switches emitted', () => {
+  test('all env values populated (incl. CDP stealth opt-in) → all 7 switches emitted', () => {
     withEnv({
       GSTACK_GPU_VENDOR: 'Apple Inc.',
       GSTACK_GPU_RENDERER: 'ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)',
@@ -161,6 +159,7 @@ describe('buildGStackLaunchArgs — Pack 1 cmdline-switch construction', () => {
       GSTACK_GPU_CHIPSET: 'Apple M4 Max',
       GSTACK_HW_CONCURRENCY: '16',
       GSTACK_DEVICE_MEMORY: '8',
+      GSTACK_CDP_STEALTH: 'on',
     }, () => {
       const args = buildGStackLaunchArgs();
       expect(args).toContain('--gstack-gpu-vendor=Apple Inc.');
@@ -195,17 +194,26 @@ describe('buildGStackLaunchArgs — Pack 1 cmdline-switch construction', () => {
   test('partial env: only set switches that have values', () => {
     withEnv({ GSTACK_HW_CONCURRENCY: '12' }, () => {
       const args = buildGStackLaunchArgs();
-      // expect hw + the always-on prepare-stack-trace suppression
+      // hw only — suppress-stack is opt-in and GSTACK_CDP_STEALTH is unset.
       expect(args).toContain('--gstack-hw-concurrency=12');
-      expect(args).toContain('--gstack-suppress-prepare-stack-trace');
-      expect(args.length).toBe(2);
+      expect(args).not.toContain('--gstack-suppress-prepare-stack-trace');
+      expect(args.length).toBe(1);
     });
   });
 
-  test('GSTACK_CDP_STEALTH=off disables prepare-stack-trace suppression', () => {
+  test('prepare-stack-trace suppression is opt-in via GSTACK_CDP_STEALTH', () => {
+    // on/1/true enable it; off and unset omit it, so stock Playwright
+    // Chromium (no GSTACK_CDP_STEALTH) never receives the unknown switch.
+    for (const v of ['on', '1', 'true']) {
+      withEnv({ GSTACK_CDP_STEALTH: v }, () => {
+        expect(buildGStackLaunchArgs()).toContain('--gstack-suppress-prepare-stack-trace');
+      });
+    }
     withEnv({ GSTACK_CDP_STEALTH: 'off' }, () => {
-      const args = buildGStackLaunchArgs();
-      expect(args).not.toContain('--gstack-suppress-prepare-stack-trace');
+      expect(buildGStackLaunchArgs()).not.toContain('--gstack-suppress-prepare-stack-trace');
+    });
+    withEnv({}, () => {
+      expect(buildGStackLaunchArgs()).not.toContain('--gstack-suppress-prepare-stack-trace');
     });
   });
 

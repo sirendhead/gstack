@@ -515,12 +515,18 @@ export function buildGStackLaunchArgs(): string[] {
   if (memory) args.push(`--gstack-device-memory=${memory}`);
 
   // Pack 2 / B11: suppress user-defined Error.prepareStackTrace during
-  // V8 stack-trace formatting. Closes the Cloudflare Bot Management
-  // canary trick where a page sets prepareStackTrace and watches for
-  // it to fire during CDP serialization. Off by default — only set
-  // when the C++ patch is present (gbrowser builds), gstack hosts
-  // running stock Playwright Chromium leave it unset.
-  if (env.GSTACK_CDP_STEALTH !== 'off') {
+  // V8 stack-trace formatting. Closes the Cloudflare Bot Management canary
+  // trick where a page sets prepareStackTrace and watches for it to fire
+  // during CDP serialization.
+  //
+  // OPT-IN (off by default): only emitted when GSTACK_CDP_STEALTH is
+  // on/1/true. This switch is read by a C++ patch that only exists in
+  // gbrowser builds; gbd opts in by exporting GSTACK_CDP_STEALTH=on. Stock
+  // Playwright Chromium leaves it unset, so the flag never reaches a
+  // Chromium that wouldn't understand it. (Previously this was on-by-default
+  // unless GSTACK_CDP_STEALTH=off, which contradicted this very comment.)
+  const cdpStealth = env.GSTACK_CDP_STEALTH;
+  if (cdpStealth === 'on' || cdpStealth === '1' || cdpStealth === 'true') {
     args.push('--gstack-suppress-prepare-stack-trace');
   }
 
